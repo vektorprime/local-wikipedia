@@ -15,4 +15,5 @@ services:
       - ./data:/app/data
       - ./data/postgresql:/etc/postgresql/16/finewiki
       - ./config.yaml:/app/config.yaml:ro
+    container_name: local-wikipedia
     restart: unless-stopped

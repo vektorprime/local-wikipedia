@@ -4,8 +4,8 @@ source:
   # For instructions on specifying languages, please refer to the list at https://huggingface.co/datasets/HuggingFaceFW/finewiki.
   language:
     # - ja # Prioritize earlier written languages
-    # - en # English as fallback
-    - simple # It is much smaller and faster to process
+    - en # English
+    # - simple
 
 server:
   # --- Optionally ---

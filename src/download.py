@@ -36,7 +36,7 @@ CACHE_DIR = DATA_DIR / "cache"
 # グローバル設定
 # ========================================
 NUM_CONSUMERS = os.cpu_count() or 4
-DATA_QUEUE = Queue(maxsize=NUM_CONSUMERS * 2)
+DATA_QUEUE = Queue(maxsize=0)  # unlimited queue (was NUM_CONSUMERS * 2)
 CHUNK_ITEMS = 2000
 MAX_RETRIES = 10
 DB_PARAMS = dict(host="localhost", port=5432, dbname="finewiki", user="dbuser", password="dbpass")
@@ -412,7 +412,8 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
             # ダウンロード
             if not os.path.exists(local_gz_file):
                 print(f"  Downloading {download_url}...")
-                response = requests.get(download_url, stream=True, timeout=60)
+                headers = {'User-Agent': 'local-wikipedia/1.0'}
+                response = requests.get(download_url, stream=True, timeout=60, headers=headers)
                 response.raise_for_status()
                 
                 total_size = int(response.headers.get('content-length', 0))
@@ -487,7 +488,7 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
                                     processed_items += 1
                                     
                                     if len(chunk) >= CHUNK_ITEMS:
-                                        DATA_QUEUE.put(('page', lang_code, chunk.copy()), timeout=10)
+                                        DATA_QUEUE.put(('page', lang_code, chunk.copy()))
                                         chunk = []
                                     
                         except Exception as parse_error:
@@ -501,7 +502,7 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
             
             # 残りのチャンクを追加
             if chunk:
-                DATA_QUEUE.put(('page', lang_code, chunk), timeout=10)
+                DATA_QUEUE.put(('page', lang_code, chunk))
             
             print(f"  ✓ Finished parsing for [{lang_code}], {processed_items:,} pages queued.", flush=True)
             
@@ -548,7 +549,7 @@ def page_consumer(db_params: Dict, progress: Dict):
                 while True:
                     item = DATA_QUEUE.get(timeout=300)
                     if item is None:
-                        DATA_QUEUE.put(None, timeout=10)
+                        DATA_QUEUE.put(None)
                         break
                     
                     data_type, lang_code, chunk = item
@@ -616,7 +617,7 @@ def execute_page_downloads(plan: Dict):
                 print(f"\n  ✗ Page producer failed with exception: {e}", file=sys.stderr, flush=True)
         
         print("\nAll page downloads finished. Signaling consumers to stop...", flush=True)
-        DATA_QUEUE.put(None, timeout=10)
+        DATA_QUEUE.put(None)
         
         # Consumer終了待ち
         for future in consumer_futures:
@@ -702,7 +703,7 @@ def document_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
             chunk_iterator = iterate_in_chunks(dataset_stream, CHUNK_ITEMS)
 
             for chunk in chunk_iterator:
-                DATA_QUEUE.put(('document', lang_code, chunk), timeout=10)
+                DATA_QUEUE.put(('document', lang_code, chunk))
                 processed_items += len(chunk)
                 retries = 0
 
@@ -739,7 +740,7 @@ def document_consumer(db_params: Dict, progress: Dict):
                 while True:
                     item = DATA_QUEUE.get(timeout=300)
                     if item is None:
-                        DATA_QUEUE.put(None, timeout=10)
+                        DATA_QUEUE.put(None)
                         break
 
                     data_type, lang_code, chunk = item
@@ -803,7 +804,7 @@ def execute_document_downloads(plan: Dict):
                 print(f"\n  ✗ Producer failed with exception: {e}", file=sys.stderr, flush=True)
 
         print("\nAll downloads finished. Signaling consumers to stop...", flush=True)
-        DATA_QUEUE.put(None, timeout=10)
+        DATA_QUEUE.put(None)
 
         for future in consumer_futures:
             try:
@@ -873,7 +874,8 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
             # ダウンロード
             if not os.path.exists(local_gz_file):
                 print(f"  Downloading {download_url}...")
-                response = requests.get(download_url, stream=True, timeout=60)
+                headers = {'User-Agent': 'local-wikipedia/1.0'}
+                response = requests.get(download_url, stream=True, timeout=60, headers=headers)
                 response.raise_for_status()
                 
                 total_size = int(response.headers.get('content-length', 0))
@@ -952,7 +954,7 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
                                 
                                 # チャンクサイズに達したらキューに追加
                                 if len(chunk) >= CHUNK_ITEMS:
-                                    DATA_QUEUE.put(('redirection', lang_code, chunk.copy()), timeout=10)
+                                    DATA_QUEUE.put(('redirection', lang_code, chunk.copy()))
                                     chunk = []
                                     
                         except Exception as parse_error:
@@ -965,7 +967,7 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
             
             # 残りのチャンクを追加
             if chunk:
-                DATA_QUEUE.put(('redirection', lang_code, chunk), timeout=10)
+                DATA_QUEUE.put(('redirection', lang_code, chunk))
             
             print(f"  ✓ Finished parsing for [{lang_code}], {processed_items:,} redirections queued.", flush=True)
             
@@ -1012,7 +1014,7 @@ def redirection_consumer(db_params: Dict, progress: Dict):
                 while True:
                     item = DATA_QUEUE.get(timeout=300)
                     if item is None:
-                        DATA_QUEUE.put(None, timeout=10)
+                        DATA_QUEUE.put(None)
                         break
                     
                     data_type, lang_code, chunk = item
@@ -1084,7 +1086,7 @@ def execute_redirection_downloads(plan: Dict):
                 print(f"\n  ✗ Redirection producer failed with exception: {e}", file=sys.stderr, flush=True)
         
         print("\nAll redirection downloads finished. Signaling consumers to stop...", flush=True)
-        DATA_QUEUE.put(None, timeout=10)
+        DATA_QUEUE.put(None)
         
         # Consumer終了待ち
         for future in consumer_futures:

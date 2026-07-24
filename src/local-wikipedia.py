@@ -44,7 +44,7 @@ AVAILABLE_LANGUAGES_STR = "[" + ", ".join(LANGUAGES) + "]"
 # CJK言語コードセット
 CJK_LANGUAGES = {'ja', 'zh', 'ko'}
 
-mcp = FastMCP("wikipedia-mcp")
+mcp = FastMCP("wikipedia-mcp", host="0.0.0.0", port=PORT)
 
 
 # ========================================
@@ -1059,13 +1059,11 @@ def read_random_article(
 # アプリケーション起動
 # ========================================
 
-app = Starlette(
-    routes=[
-        Mount("/", app=mcp.sse_app()),
-    ]
-)
+# Streamable HTTP transport for OpenWebUI compatibility
+# (replaces Starlette+Mount with native FastMCP streamable HTTP runner)
+
 
 if __name__ == "__main__":
-    logger.info("Starting MCP Wikipedia server...")
-    print("Starting MCP Wikipedia server...")
-    uvicorn.run("local-wikipedia:app", host="0.0.0.0", port=PORT, log_level="info")
+    logger.info("Starting MCP Wikipedia server (streamable HTTP)...")
+    print("Starting MCP Wikipedia server (streamable HTTP)...")
+    mcp.run(transport="streamable-http")

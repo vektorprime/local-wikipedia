@@ -13,16 +13,16 @@ from typing import Optional, Tuple, List, Literal
 from collections import OrderedDict
 from dataclasses import dataclass, field
 
-# ログ設定
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
-    format='%(levelname)s - %(message)s' # 時刻はどうせDockerログに入るので不要
+    format='%(levelname)s - %(message)s' # Timestamps are handled by Docker logs
 )
 logger = logging.getLogger(__name__)
 
 DB_PARAMS = dict(host="localhost", port=5432, dbname="finewiki", user="dbuser", password="dbpass")
 
-# config.yaml読み込み
+# Load config.yaml
 try:
     with open("config.yaml", "r") as f:
         config = yaml.safe_load(f)
@@ -38,41 +38,41 @@ except Exception as e:
     logger.error(f"Failed to load config.yaml: {e}")
     raise
 
-# 利用可能な言語リストを文字列化
+# Stringify available language list
 AVAILABLE_LANGUAGES_STR = "[" + ", ".join(LANGUAGES) + "]"
 
-# CJK言語コードセット
+# CJK language code set
 CJK_LANGUAGES = {'ja', 'zh', 'ko'}
 
 mcp = FastMCP("wikipedia-mcp", host="0.0.0.0", port=PORT)
 
 
 # ========================================
-# ユーティリティ関数
+# Utility functions
 # ========================================
 def is_cjk_language(lang: str) -> bool:
     """
-    言語コードがCJK言語かどうかを判定
+    Determine if language code is CJK
     
     Args:
-        lang: 言語コード
+        lang: Language code
     
     Returns:
-        CJK言語ならTrue
+        True if CJK language
     """
     return lang in CJK_LANGUAGES
 
 
 def count_text_units(text: str, is_cjk: bool) -> int:
     """
-    テキストの文字数または単語数をカウント
+    Count characters or words in text
     
     Args:
-        text: テキスト
-        is_cjk: CJK言語かどうか
+        text: Text
+        is_cjk: Whether it's a CJK language
     
     Returns:
-        CJKなら文字数、それ以外なら単語数
+        Character count for CJK, word count otherwise
     """
     if is_cjk:
         return len(text)
@@ -81,19 +81,19 @@ def count_text_units(text: str, is_cjk: bool) -> int:
 
 
 # ========================================
-# データベース接続ヘルパー
+# Database connection helper
 # ========================================
 
 @contextmanager
 def db_cursor(autocommit: bool = False):
     """
-    データベースカーソルを提供（接続とカーソルを自動管理）
+    Provide database cursor (auto-manage connection and cursor)
     
     Args:
-        autocommit: 自動コミットするかどうか（デフォルト: False）
+        autocommit: Auto-commit (default: False)
     
     Yields:
-        psycopg2.cursor: データベースカーソル
+        psycopg2.cursor: Database cursor
     """
     conn = None
     try:
@@ -115,23 +115,23 @@ def db_cursor(autocommit: bool = False):
 
 
 # ========================================
-# データアクセス層
+# Data access layer
 # ========================================
 
 def get_document_by_title(cur, title: str, lang: str) -> Optional[Tuple[str, str]]:
     """
-    タイトルから記事を取得
+    Fetch article by title
     
     Args:
-        cur: データベースカーソル
-        title: 記事タイトル
-        lang: 言語コード
+        cur: Database cursor
+        title: Article title
+        lang: Language code
     
     Returns:
-        (title, text_body) または None
+        (title, text_body) or None
     """
     logger.debug(f"DB Query: get_document_by_title with title='{title}', lang='{lang}'")
-    # Wikipedia内部でのタイトルは"_"で区切られているが、finewikiのdocumentsテーブルではスペースで保存されているため、変換する
+    # Wikipedia uses '_' in titles, but finewiki stores them with spaces, so convert
     title = title.replace("_", " ")
     cur.execute(
         "SELECT title, text_body FROM documents WHERE title = %s AND language_code = %s LIMIT 1",
@@ -143,15 +143,15 @@ def get_document_by_title(cur, title: str, lang: str) -> Optional[Tuple[str, str
 
 def get_page_id_by_title(cur, title: str, lang: str) -> Optional[int]:
     """
-    タイトルから page_id を取得
+    Get page_id by title
     
     Args:
-        cur: データベースカーソル
-        title: 記事タイトル
-        lang: 言語コード
+        cur: Database cursor
+        title: Article title
+        lang: Language code
     
     Returns:
-        page_id または None
+        page_id or None
     """
     normalized_title = normalize_title_for_page(title)
     logger.debug(f"DB Query: get_page_id_by_title with title='{normalized_title}', lang='{lang}'")
@@ -165,15 +165,15 @@ def get_page_id_by_title(cur, title: str, lang: str) -> Optional[int]:
 
 def get_redirect_target(cur, page_id: int, lang: str) -> Optional[str]:
     """
-    page_id からリダイレクト先タイトルを取得
+    Get redirect target title from page_id
     
     Args:
-        cur: データベースカーソル
-        page_id: ページID
-        lang: 言語コード
+        cur: Database cursor
+        page_id: Page ID
+        lang: Language code
     
     Returns:
-        リダイレクト先タイトル または None
+        Redirect target title or None
     """
     logger.debug(f"DB Query: get_redirect_target with page_id='{page_id}', lang='{lang}'")
     cur.execute(
@@ -186,15 +186,15 @@ def get_redirect_target(cur, page_id: int, lang: str) -> Optional[str]:
 
 def search_exact_match(cur, query: str, lang: str) -> Optional[Tuple[str, str]]:
     """
-    完全一致検索
+    Exact match search
     
     Args:
-        cur: データベースカーソル
-        query: 検索クエリ
-        lang: 言語コード
+        cur: Database cursor
+        query: Search query
+        lang: Language code
     
     Returns:
-        (title, text_body) または None
+        (title, text_body) or None
     """
     logger.debug(f"DB Query: search_exact_match with query='{query}', lang='{lang}'")
     cur.execute(
@@ -207,18 +207,18 @@ def search_exact_match(cur, query: str, lang: str) -> Optional[Tuple[str, str]]:
 
 def search_title_match(cur, query: str, lang: str, limit: int) -> List[Tuple[str, str]]:
     """
-    タイトル部分一致検索
+    Title partial match
     
     Args:
-        cur: データベースカーソル
-        query: 検索クエリ
-        lang: 言語コード
-        limit: 最大取得件数
+        cur: Database cursor
+        query: Search query
+        lang: Language code
+        limit: Maximum results
     
     Returns:
-        [(title, snippet), ...] のリスト
+        List of (title, snippet) tuples
     """
-    if not query: return [] # 空クエリによるエラーを防止
+    if not query: return [] # Prevent errors from empty queries
     logger.debug(f"DB Query: search_title_match with query='{query}', lang='{lang}', limit={limit}")
     cur.execute(
         "SELECT title, pgroonga_snippet_html(title, pgroonga_query_extract_keywords(%s)) "
@@ -230,16 +230,16 @@ def search_title_match(cur, query: str, lang: str, limit: int) -> List[Tuple[str
 
 def search_redirect_match(cur, query: str, lang: str, limit: int) -> List[Tuple[str, str]]:
     """
-    リダイレクト一致検索
+    Redirect match search
     
     Args:
-        cur: データベースカーソル
-        query: 検索クエリ
-        lang: 言語コード
-        limit: 最大取得件数
+        cur: Database cursor
+        query: Search query
+        lang: Language code
+        limit: Maximum results
     
     Returns:
-        [(from_title, to_title), ...] のリスト
+        List of (from_title, to_title) tuples
     """
     normalized_query = normalize_title_for_page(query)
     logger.debug(f"DB Query: search_redirect_match with query='{normalized_query}', lang='{lang}', limit={limit}")
@@ -258,19 +258,19 @@ def search_redirect_match(cur, query: str, lang: str, limit: int) -> List[Tuple[
 
 def search_body_match(cur, query: str, lang: str, exclude_title: str, limit: int) -> List[Tuple[str, str]]:
     """
-    本文一致検索
+    Body text match search
     
     Args:
-        cur: データベースカーソル
-        query: 検索クエリ
-        lang: 言語コード
-        exclude_title: 除外するタイトル（完全一致を避けるため）
-        limit: 最大取得件数
+        cur: Database cursor
+        query: Search query
+        lang: Language code
+        exclude_title: Title to exclude (to avoid exact match duplicates)
+        limit: Maximum results
     
     Returns:
-        [(title, snippet), ...] のリスト
+        List of (title, snippet) tuples
     """
-    if not query: return [] # 空クエリによるエラーを防止
+    if not query: return [] # Prevent errors from empty queries
     logger.debug(f"DB Query: search_body_match with query='{query}', lang='{lang}', exclude_title='{exclude_title}', limit={limit}")
     cur.execute(
         "SELECT title, pgroonga_snippet_html(text_body, pgroonga_query_extract_keywords(%s)) "
@@ -282,17 +282,17 @@ def search_body_match(cur, query: str, lang: str, exclude_title: str, limit: int
 
 def get_random_article(cur, langs: List[str]) -> Optional[Tuple[str, str]]:
     """
-    ランダム記事を取得
+    Fetch random article
     
     Args:
-        cur: データベースカーソル
-        langs: 言語コード
+        cur: Database cursor
+        langs: Language code
     
     Returns:
-        (title, text_body) または None
+        (title, text_body) or None
     """
     logger.debug(f"DB Query: get_random_article with langs='{langs}'")
-    # documentsテーブルからその言語の中でランダムに1件取得
+    # Fetch one random document from the given languages
     cur.execute(
         "SELECT title, text_body FROM documents "
         "WHERE language_code = ANY(%s) "
@@ -304,64 +304,64 @@ def get_random_article(cur, langs: List[str]) -> Optional[Tuple[str, str]]:
 
 
 # ========================================
-# ヒューリスティック検索ロジック
+# Heuristic search logic
 # ========================================
 def generate_heuristic_queries(query: str, search_languages: List[str]) -> List[str]:
     """
-    元のクエリから、ヒューリスティックに基づいて複数の検索候補を生成する。
-    優先度順にソートされたクエリのリストを返す。
+    Generate multiple search candidates from the original query using heuristics.
+    Return a list of queries sorted by priority.
 
     Args:
-        query: 元の検索クエリ
-        search_languages: 検索対象言語リスト
+        query: Original search query
+        search_languages: Target language list
 
     Returns:
-        検索クエリ候補のリスト
+        List of search query candidates
     """
     if not query:
         return []
 
-    # OrderedDictを使い、順序を維持しつつ重複を排除
+    # Use OrderedDict to maintain order while deduplicating
     queries = OrderedDict()
-    queries[query.strip()] = None  # 元のクエリを最優先
+    queries[query.strip()] = None  # Original query gets highest priority
 
-    # 1. 先頭大文字バージョンを追加
+    # 1. Add capitalized version
     capitalized_q = query.strip().capitalize()
     if capitalized_q != query:
         queries[capitalized_q] = None
     
-    # CJKが含まれるかチェック
+    # Check if CJK languages are included
     contains_cjk = any(lang in CJK_LANGUAGES for lang in search_languages)
     meaningful_length = 3 if contains_cjk else 6
 
-    # 2. 言語コード `(ja)` などを除去
+    # 2. Remove language code suffixes like (ja)
     lang_code_pattern = re.compile(r'(.+?)\s+\(([a-z]{2,3})\)$', re.IGNORECASE)
     match = lang_code_pattern.match(query)
     if match:
         stripped_query = match.group(1).strip()
         queries[stripped_query] = None
 
-    # 3. 括弧の処理
-    # 例えば、`願成寺_(喜多方市)`であれば、`願成寺_`(高優先度)と`喜多方市`(低優先度)を抽出して追加する
+    # 3. Bracket handling
+    # e.g., from 'Article_(City)' extract 'Article_' (high priority) and 'City' (low priority)
     bracket_pairs = [('「', '」'), ('『', '』'), ('(', ')'), ('[', ']'), ('【', '】')]
-    # 括弧内の文字列を後で追加するために保持（優先度を下げる）
+    # Hold bracket contents for later (lower priority)
     bracket_contents = []
 
-    # 現在の候補リストをコピーしてイテレート
+    # Copy and iterate current candidates
     current_queries = list(queries.keys())
     for q in current_queries:
-        # a. まず括弧内の内容を抽出して保持（後で追加するため）
+        # a. First extract bracket contents for later addition
         for start, end in bracket_pairs:
             escaped_start = re.escape(start)
             escaped_end = re.escape(end)
             inner_matches = re.findall(f'{escaped_start}(.+?){escaped_end}', q)
             for inner in inner_matches:
                 inner_stripped = inner.strip()
-                # 抽出した文字列が短すぎる場合は無視
+                # Ignore extracted strings that are too short
                 if inner_stripped and len(inner_stripped) >= 2:
                     bracket_contents.append(inner_stripped)
         
-        # b. 括弧を単純に除去したバージョン（こちらを先に追加して優先度を上げる）
+        # b. Version with brackets simply removed (add first, higher priority)
         stripped_q = q
         for start, end in bracket_pairs:
             stripped_q = stripped_q.replace(start, "").replace(end, "")
@@ -370,12 +370,12 @@ def generate_heuristic_queries(query: str, search_languages: List[str]) -> List[
         if stripped_q and stripped_q != q:
             queries[stripped_q] = None
     
-    # 4. その他LLMの誤りやすいパターン（冗長な表現）を除去
+    # 4. Remove verbose patterns that LLMs tend to produce
     current_queries = list(queries.keys())
     for q in current_queries:
         modified_q = q
         
-        # 多言語対応の接頭辞・接尾辞パターン
+        # Multi-language prefix/suffix patterns
         prefix_patterns = [
             r"^(?:tell me about|explain|what is|what's|describe)\s+", # en
             r"^(?:was ist|erkläre mir|erzähl mir von|beschreibe)\s+", # de
@@ -385,17 +385,17 @@ def generate_heuristic_queries(query: str, search_languages: List[str]) -> List[
             r"^(?:che cos'è|cos'è|spiegami|parlami di|descrivimi)\s+", # it
         ]
         suffix_patterns = [
-            r"(?:について(?:教えて|おしえて)?|とは|を(?:教えて|おしえて|調べて|しらべて))$", # ja
+            r"(?:について(?:教えて|おしえて)?|とは|を(?:教えて|おしえて|調べて|しらべて))$", # ja (Japanese suffix patterns)
             r"\s+(?:about|on the topic of|regarding)$", # en
             r"\s+(?:über|bezüglich|hinsichtlich)$", # de
             r"\s+(?:sur|à propos de|concernant)$", # fr
-            r"\s+(?:о|об|про)$", # ru (限定的)
+            r"\s+(?:о|об|про)$", # ru (limited)
             r"\s+(?:sobre|acerca de)$", # es
             r"\s+(?:su|riguardo a)$", # it
         ]
         split_patterns = [
             r"\s+of\s+", # en
-            r"[のでにをは]", # ja
+            r"[のでにをは]", # ja (Japanese particles)
             r"\s+von\s+", # de
             r"\s+de\s+", # fr, es
             r"\s+di\s+", # it
@@ -403,54 +403,54 @@ def generate_heuristic_queries(query: str, search_languages: List[str]) -> List[
             r"\s*[_\-<>|:;/\\]\s*", # 記号類
         ]
         
-        # 接頭辞の除去
+        # Remove prefixes
         for pattern in prefix_patterns:
             modified_q = re.sub(pattern, '', modified_q, flags=re.IGNORECASE)
-        # 接尾辞の除去
+        # Remove suffixes
         for pattern in suffix_patterns:
             modified_q = re.sub(pattern, '', modified_q, flags=re.IGNORECASE)
 
-        # "of" や "の" で分割して主要部分を抽出
+        # Split on "of"/"の" to extract key parts
         for pattern in split_patterns:
             parts = re.split(pattern, modified_q, flags=re.IGNORECASE)
-            # 長さが指定文字以上の部分について抽出
+            # Extract parts above minimum length
             valid_parts = []
             for part in parts:
                 part = part.strip()
-                # 分割後のパーツからも括弧を除去
+                # Also remove brackets from split parts
                 for start, end in bracket_pairs:
                     part = part.replace(start, "").replace(end, "")
                 part = part.strip()
                 if len(part) >= meaningful_length:
                     valid_parts.append(part)
             
-            # CJKの場合は前方優先（出現順）、それ以外は長い順
+            # Front-first for CJK (order of appearance), longest-first otherwise
             if contains_cjk:
-                # 出現順で追加（前方に出現した文字列を優先）
+                # Add in order of appearance (earlier = higher priority)
                 for part in valid_parts:
                     if part and part != q:
                         queries[part] = None
             else:
-                # 長い順にソート
+                # Sort by length descending
                 valid_parts.sort(key=len, reverse=True)
                 for part in valid_parts:
                     if part and part != q:
                         queries[part] = None
 
-        # もし検索言語が日本語・中国語・韓国語なら、スペースでの分割も試みる
+        # For CJK languages, also try space-splitting
         if contains_cjk:
             space_parts = modified_q.split()
-            # 前方から順に追加（出現順を優先）
+            # Add front to back (order of appearance)
             for part in space_parts:
                 part = part.strip()
-                # スペース分割後のパーツからも括弧を除去
+                # Also remove brackets from space-split parts
                 for start, end in bracket_pairs:
                     part = part.replace(start, "").replace(end, "")
                 part = part.strip()
                 if len(part) >= meaningful_length and part not in queries:
                     queries[part] = None
         
-        # 処理後に残った両端の括弧や引用符を除去
+        # Strip remaining bracket/quote chars from edges
         bracket_chars = "「」『』\"'()[]【】"
         modified_q = modified_q.strip(bracket_chars)
 
@@ -458,7 +458,7 @@ def generate_heuristic_queries(query: str, search_languages: List[str]) -> List[
         if modified_q and modified_q != q:
             queries[modified_q] = None
 
-    # 5. 最後に括弧内の文字列を追加（優先度を最も低くする）
+    # 5. Finally add bracket contents (lowest priority)
     for content in bracket_contents:
         if content not in queries:
             queries[content] = None
@@ -469,18 +469,18 @@ def generate_heuristic_queries(query: str, search_languages: List[str]) -> List[
 
 
 # ========================================
-# ビジネスロジック層
+# Business logic layer
 # ========================================
 
 def normalize_title_for_page(title: str) -> str:
     """
-    Wikipediaのpage_title形式に正規化（スペース→アンダースコア、先頭大文字化）
+    Normalize to Wikipedia page_title format (spaces→underscores, capitalize first letter)
     
     Args:
-        title: 元のタイトル
+        title: Original title
     
     Returns:
-        正規化されたタイトル
+        Normalized title
     """
     normalized = title.replace(" ", "_")
     if normalized:
@@ -490,15 +490,15 @@ def normalize_title_for_page(title: str) -> str:
 
 def resolve_redirect(cur, title: str, lang: str) -> Optional[Tuple[str, str]]:
     """
-    リダイレクト先のタイトルと元タイトルを取得
+    Get redirect target and original title
     
     Args:
-        cur: データベースカーソル
-        title: 元のタイトル
-        lang: 言語コード
+        cur: Database cursor
+        title: Original title
+        lang: Language code
     
     Returns:
-        (redirect_target_title, original_title) または None
+        (redirect_target_title, original_title) or None
     """
     page_id = get_page_id_by_title(cur, title, lang)
     if not page_id:
@@ -514,10 +514,10 @@ def resolve_redirect(cur, title: str, lang: str) -> Optional[Tuple[str, str]]:
 
 def validate_languages(languages: Optional[List[str]]) -> Tuple[bool, List[str], str]:
     """
-    言語リストを検証し、検索対象言語を決定
+    Validate language list and determine search languages
     
     Args:
-        languages: 言語コードリスト（オプション）
+        languages: Language code list (optional)
     
     Returns:
         (is_valid, search_languages, error_message)
@@ -535,64 +535,64 @@ def validate_languages(languages: Optional[List[str]]) -> Tuple[bool, List[str],
 
 def normalize_languages_input(languages: Optional[list[str] | str]) -> Optional[list[str]]:
     """
-    languages引数を正規化してlist[str]に変換する。
+    Normalize languages argument to list[str].
     
     Args:
-        languages: 言語指定（list, str, またはNone）
+        languages: Language specification (list, str, or None)
     
     Returns:
-        正規化されたlist[str]、またはNone
+        Normalized list[str] or None
     """
     if languages is None:
         return None
     
-    # すでにリストの場合
+    # Already a list
     if isinstance(languages, list):
         return languages
     
-    # 文字列の場合
+    # If string
     if isinstance(languages, str):
-        # 空白を除去してから処理
+        # Strip whitespace first
         languages = languages.strip()
         
         if not languages:
             return None
         
-        # カンマ区切り（スペース有無両対応: "en,ja" or "en, ja, de"）
+        # Comma-separated (with or without spaces: 'en,ja' or 'en, ja, de')
         if ',' in languages:
             return [lang.strip() for lang in languages.split(',') if lang.strip()]
         
-        # スペース区切り（言語コードには空白が含まれないため安全に分割可能）
+        # Space-separated (safe since language codes contain no spaces)
         if ' ' in languages:
             return [lang.strip() for lang in languages.split() if lang.strip()]
         
-        # 単一の言語コード
+        # Single language code
         return [languages]
     
-    # その他の型の場合はログに記録してNoneを返す
+    # Log and return None for unexpected types
     logger.warning(f"Unexpected type for languages: {type(languages)}, value: {languages}")
     return None
 
 
 # ========================================
-# プレゼンテーション層
+# Presentation layer
 # ========================================
 @dataclass
 class Paragraph:
-    """段落やブロック要素を表現するデータクラス"""
+    """Dataclass representing a paragraph or block element"""
     text: str
-    line_start: int  # このブロックが開始する行番号
+    line_start: int  # Line number where this block starts
     priority: int = 0
     parent: Optional['HeadingBlock'] = None
 
 
 @dataclass
 class HeadingBlock:
-    """見出しとそれに属するコンテンツを表現するツリーノード"""
+    """Tree node representing a heading and its content"""
     level: int
     title: str
     content: str
-    line_start: int  # この見出しがあった行番号
+    line_start: int  # Line number where this heading appears
     is_special: bool = False
     paragraphs: List[Paragraph] = field(default_factory=list)
     children: List['HeadingBlock'] = field(default_factory=list)
@@ -600,7 +600,7 @@ class HeadingBlock:
 
 
 def parse_markdown(text: str) -> Tuple[HeadingBlock, List[HeadingBlock], List[Paragraph]]:
-    """Markdown文書を解析して階層構造を構築する"""
+    """Parse a Markdown document into a hierarchical structure"""
     root = HeadingBlock(level=0, title="root", content="", line_start=-1)
     all_headings: List[HeadingBlock] = []
     all_paragraphs: List[Paragraph] = []
@@ -613,7 +613,7 @@ def parse_markdown(text: str) -> Tuple[HeadingBlock, List[HeadingBlock], List[Pa
     while i < len(lines):
         line = lines[i]
 
-        # 1. 見出しの処理
+        # 1. Heading processing
         heading_match = re.match(r'^(#{1,6})\s+(.+)$', line)
         if heading_match:
             level = len(heading_match.group(1))
@@ -634,12 +634,12 @@ def parse_markdown(text: str) -> Tuple[HeadingBlock, List[HeadingBlock], List[Pa
             i += 1
             continue
 
-        # 2. 空行はスキップ
+        # 2. Skip blank lines
         if not line.strip():
             i += 1
             continue
 
-        # 3. ブロック要素の処理
+        # 3. Block element processing
         start_index = i
         
         if line.strip().startswith('```'):
@@ -649,7 +649,7 @@ def parse_markdown(text: str) -> Tuple[HeadingBlock, List[HeadingBlock], List[Pa
         elif re.match(r'^\s*([-*+]|\d+\.)\s+', line):
             i += 1
             while i < len(lines) and lines[i].strip():
-                # 空行が現れるまでを一つのリストとみなす
+                # Treat consecutive non-blank lines as one list item
                 i += 1
             i -= 1
         elif '|' in line:
@@ -671,17 +671,17 @@ def parse_markdown(text: str) -> Tuple[HeadingBlock, List[HeadingBlock], List[Pa
 
 
 def assign_priorities(root: HeadingBlock, all_headings: List[HeadingBlock]) -> None:
-    """階層的ラウンドロビンアルゴリズムで優先度を付与する"""
+    """Assign priorities using hierarchical round-robin algorithm"""
     priority = 1
     max_level = max([h.level for h in all_headings], default=0)
     
-    # ルート直下の段落（レベル0として扱う）から処理
+    # Process paragraphs directly under root (treated as level 0)
     if root.paragraphs:
         for para in root.paragraphs:
             para.priority = priority
             priority += 1
 
-    # レベル1から順に処理
+    # Process from level 1 upward
     for level in range(1, max_level + 1):
         nodes = [h for h in all_headings if h.level == level]
         if not nodes:
@@ -710,9 +710,9 @@ def assign_priorities(root: HeadingBlock, all_headings: List[HeadingBlock]) -> N
 
 def reconstruct_markdown(selected_paragraphs: List[Paragraph], 
                         all_headings: List[HeadingBlock]) -> Tuple[str, List[HeadingBlock]]:
-    """選択された段落とそれに必要な見出しからMarkdown文書を再構築する"""
+    """Reconstruct Markdown from selected paragraphs and required headings"""
     
-    # 1. 出力に必要な見出しを特定する
+    # 1. Identify headings needed for output
     required_headings: List[HeadingBlock] = []
     for para in selected_paragraphs:
         h = para.parent
@@ -721,13 +721,13 @@ def reconstruct_markdown(selected_paragraphs: List[Paragraph],
                 required_headings.append(h)
             h = h.parent
 
-    # 2. 出力する全要素（見出しと段落）を一つのリストにまとめる
+    # 2. Combine all output elements (headings and paragraphs) into one list
     output_elements: List[Union[HeadingBlock, Paragraph]] = required_headings + selected_paragraphs
 
-    # 3. 元の文書の出現順（行番号）でソートする
+    # 3. Sort by original document order (line number)
     output_elements.sort(key=lambda elem: elem.line_start)
 
-    # 4. ソートされた要素を結合してテキストを生成する
+    # 4. Join sorted elements into text
     result_parts = []
     for elem in output_elements:
         text = elem.content if isinstance(elem, HeadingBlock) else elem.text
@@ -735,9 +735,9 @@ def reconstruct_markdown(selected_paragraphs: List[Paragraph],
     
     result_text = "\n\n".join(result_parts)
 
-    # 5. 省略された見出しを計算する
+    # 5. Compute omitted headings
     omitted = [h for h in all_headings if h not in required_headings and h.level >= 2]
-    # 元の文書順にソート（all_headingsは既にソート済みなのでインデックスでソート可能）
+    # Sort by original document order (all_headings already sorted, index-based)
     omitted.sort(key=lambda h: all_headings.index(h))
     
     return result_text, omitted
@@ -745,15 +745,15 @@ def reconstruct_markdown(selected_paragraphs: List[Paragraph],
 
 def extract_article_by_length(text_body: str, length: Literal["very-short", "short", "medium", "full"], is_cjk: bool) -> str:
     """
-    記事を指定された長さで抽出する
+    Extract article at the specified length
     
     Args:
-        text_body: 記事本文
-        length: 抽出する長さ（"very-short", "short", "medium", "full"）
-        is_cjk: CJK言語かどうか
+        text_body: Article body
+        length: Extraction length ('very-short', 'short', 'medium', 'full')
+        is_cjk: Whether it's a CJK language
     
     Returns:
-        抽出されたテキスト
+        Extracted text
     """
     if length == "full":
         return text_body
@@ -768,22 +768,22 @@ def extract_article_by_length(text_body: str, length: Literal["very-short", "sho
     root, all_headings, all_paragraphs = parse_markdown(text_body)
     assign_priorities(root, all_headings)
     
-    # 優先度順にソート（優先度が同じ場合は元の出現順）
+    # Sort by priority (fallback to original order)
     sorted_paras = sorted(all_paragraphs, key=lambda p: (p.priority, p.line_start))
     
     selected: List[Paragraph] = []
     total_units = 0
     
-    # 選択済みの見出しを追跡
+    # Track already-included headings
     temp_included_headings: List[HeadingBlock] = []
     
     for para in sorted_paras:
         if not para.text.strip(): continue
         
-        # この段落を追加した場合のコストを計算
+        # Compute cost of adding this paragraph
         prospective_units = count_text_units(para.text, is_cjk)
         
-        # 新しく追加が必要な見出しのコストも加算
+        # Also include cost of newly-needed headings
         h = para.parent
         while h and h.level > 0:
             if h not in temp_included_headings:
@@ -794,14 +794,14 @@ def extract_article_by_length(text_body: str, length: Literal["very-short", "sho
             selected.append(para)
             total_units += prospective_units
             
-            # 実際に追加したので、見出しリストを更新
+            # Actually added, so update heading list
             h = para.parent
             while h and h.level > 0:
                 if h not in temp_included_headings:
                     temp_included_headings.append(h)
                 h = h.parent
         else:
-            # 制限を超えても、最低1つの段落は含める
+            # Include at least one paragraph even if it exceeds the limit
             if not selected:
                 selected.append(para)
             break
@@ -809,8 +809,8 @@ def extract_article_by_length(text_body: str, length: Literal["very-short", "sho
     result_text, omitted_headings = reconstruct_markdown(selected, all_headings)
 
     if length == "very-short":
-        # very-shortの場合は、追加情報を含めずに返す
-        # また、ヘッダー部分は単なるテキストに置き換える
+        # For very-short, return without extra info
+        # Also, replace header markup with plain text
         simple_text = []
         for line in result_text.split('\n'):
             heading_match = re.match(r'^(#{1,6})\s+(.+)$', line)
@@ -821,11 +821,11 @@ def extract_article_by_length(text_body: str, length: Literal["very-short", "sho
                 simple_text.append(line)
         return "\n".join(simple_text)
 
-    # 1. 省略された段落があるかどうかを判定
+    # 1. Determine if any paragraphs were omitted
     total_non_empty_paragraphs = sum(1 for p in all_paragraphs if p.text.strip())
     has_omitted_paragraphs = len(selected) < total_non_empty_paragraphs
 
-    # 2. Omitted Headingsセクションを追加
+    # 2. Append Omitted Headings section
     if omitted_headings:
         omitted_text_parts = ["\n\n## Omitted Headings"]
         for heading_block in omitted_headings:
@@ -835,24 +835,24 @@ def extract_article_by_length(text_body: str, length: Literal["very-short", "sho
             omitted_text_parts.append(f"{indent}- {title}")
         result_text += "\n".join(omitted_text_parts)
     
-    # 3. 省略された段落がある場合に、指定のメッセージを追加
+    # 3. If paragraphs were omitted, append the hint message
     if has_omitted_paragraphs:
         larger_length = "medium" if length == "short" else "full"
-        result_text += f"\n\nIf you want to read more, please use the `search_article` tool with `length='{larger_length}'` to get a more detailed article.\n"
+        result_text += f"\n\nIf you want to read more, please use the `search_local_wikipedia` tool with `length='{larger_length}'` to get a more detailed article.\n"
 
     return result_text
 
 
 def format_html_snippet(html_snippet: str, max_length: int = 200) -> str:
     """
-    HTMLスニペットを整形（タグ除去、強調変換、長さ制限）
+    Format HTML snippet (strip tags, convert emphasis, limit length)
     
     Args:
-        html_snippet: HTMLスニペット
-        max_length: 最大文字数
+        html_snippet: HTML snippet
+        max_length: Maximum characters
     
     Returns:
-        整形されたテキスト
+        Formatted text
     """
     formatted = html_snippet.replace('<span class="keyword">', '**').replace('</span>', '**')
     if len(formatted) > max_length:
@@ -862,17 +862,17 @@ def format_html_snippet(html_snippet: str, max_length: int = 200) -> str:
 
 def format_article_with_redirect_notice(text_body: str, from_title: str, to_title: str, length: Literal["very-short", "short", "medium", "full"], lang: str) -> str:
     """
-    リダイレクト通知付きで記事を整形
+    Format article with redirect notice
     
     Args:
-        text_body: 記事本文
-        from_title: リダイレクト元タイトル
-        to_title: リダイレクト先タイトル
-        length: 抽出する長さ
-        lang: 言語コード
+        text_body: Article body
+        from_title: Redirect source title
+        to_title: Redirect target title
+        length: Extraction length
+        lang: Language code
     
     Returns:
-        整形された記事テキスト
+        Formatted article text
     """
     redirect_notice = f"(Redirected from '{from_title}' to '{to_title}')\n\n"
     is_cjk = is_cjk_language(lang)
@@ -881,11 +881,11 @@ def format_article_with_redirect_notice(text_body: str, from_title: str, to_titl
 
 
 # ========================================
-# MCPツール
+# MCP tools
 # ========================================
 
 @mcp.tool()
-def search_article(
+def search_local_wikipedia(
     title: str,
     length: Literal["very-short", "short", "medium", "full"] = "medium",
     languages: Optional[list[str] | str] = None,
@@ -902,21 +902,21 @@ def search_article(
     
     **Be careful when setting arguments when using the tool**.
     """
-    logger.info(f"search_article called with title: {title}, languages: {languages}, length: {length}")
+    logger.info(f"search_local_wikipedia called with title: {title}, languages: {languages}, length: {length}")
 
     if length == "long":
         length = "full"
 
-    # 言語パラメータを正規化
+    # Normalize language parameter
     normalized_languages = normalize_languages_input(languages)
     logger.info(f"Normalized languages: {normalized_languages}")
 
-    # 言語パラメータを検証
+    # Validate language parameter
     is_valid, search_languages, error_msg = validate_languages(normalized_languages)
     if not is_valid:
         return error_msg
     
-    # ヒューリスティックに基づくクエリバリエーション生成
+    # Generate query variations using heuristics
     queries_to_try = generate_heuristic_queries(title, search_languages)
     if not queries_to_try:
         return f"Article not found: Invalid title '{title}'"
@@ -924,11 +924,11 @@ def search_article(
     try:
         with db_cursor() as cur:
 
-            # 素直にクエリバリエーションと各言語で順次検索
+            # Try each query variant against each language in order
             for query_variant in queries_to_try:
                 for lang in search_languages:
 
-                    # 1. タイトルで完全一致検索
+                    # 1. Exact title match
                     logger.info(f"Trying exact match for '{query_variant}' in {lang}")
                     result = get_document_by_title(cur, query_variant, lang)
                     if result:
@@ -941,7 +941,7 @@ def search_article(
                         logger.info(f"Article found: {found_title} in {lang}")
                         return notice + snippet
                     
-                    # 2. リダイレクトで完全一致検索
+                    # 2. Redirect exact match
                     logger.info(f"Checking redirect for '{query_variant}' in {lang}")
                     redirect_info = resolve_redirect(cur, query_variant, lang)
                     if redirect_info:
@@ -959,12 +959,12 @@ def search_article(
 
                             return format_article_with_redirect_notice(text_body, from_display, redirect_title, length, lang)
 
-            # それでも見つからなければ、部分一致で補足検索
+            # If still not found, fall back to partial match search
             results = []
             for query_variant in queries_to_try:
                 for lang in search_languages:
 
-                    # 3. タイトル部分一致検索
+                    # 3. Title partial match
                     logger.info(f"Trying title match for '{query_variant}' in {lang}")
                     title_matches = search_title_match(cur, query_variant, lang, MAX_SEARCH_RESULTS - len(results))
                     for match_title, snippet in title_matches:
@@ -974,7 +974,7 @@ def search_article(
                         if len(results) >= MAX_SEARCH_RESULTS:
                             break
 
-                    # 4. リダイレクト部分一致検索
+                    # 4. Redirect partial match
                     logger.info(f"Trying redirect match for '{query_variant}' in {lang}")
                     redirect_matches = search_redirect_match(cur, query_variant, lang, MAX_SEARCH_RESULTS - len(results))
                     for from_t, to_t in redirect_matches:
@@ -984,7 +984,7 @@ def search_article(
                         if len(results) >= MAX_SEARCH_RESULTS:
                             break
             
-            # それでも20件に満たなければ、本文部分一致検索
+            # If still fewer than 20 results, full-text body search
             for query_variant in queries_to_try:
                 for lang in search_languages:
                     logger.info(f"Trying body match for '{query_variant}' in {lang}")
@@ -1001,62 +1001,12 @@ def search_article(
             logger.warning(f"Article not found for any variation of: {title}")
             return f"Article not found: {title}\nPlease try different keywords."
     except Exception as e:
-        logger.error(f"Error in search_article: {e}", exc_info=True)
+        logger.error(f"Error in search_local_wikipedia: {e}", exc_info=True)
         return f"Error reading article: {str(e)}"
 
 
-@mcp.tool()
-def read_random_article(
-    length: Literal["very-short", "short", "medium", "full", "long"] = "medium", # longはfullの別名
-    languages: Optional[list[str] | str] = None,
-) -> str:
-    f"""
-    Read a random Wikipedia article. Automatically excludes redirect pages to ensure actual content is returned.
-    
-    Args:
-        length: Length of the article to extract. Defaults to "medium". Set "very-short" for a brief snippet, "short" for a summary, "medium" for a detailed summary, and "full" or "long" for the entire article.
-        languages: Specific language code list (optional). Available languages: {AVAILABLE_LANGUAGES_STR}.
-
-    Since this tool returns a random article each time it's called, if you want to view the same article again in detail, **NEVER USE THIS TOOL** and **ALWAYS USE THE `search_article` FUNCTION** instead**.
-    """
-    logger.info(f"read_random_article called with languages: {languages}, length: {length}")
-
-    if length == "long":
-        length = "full"
-
-    # 言語パラメータを正規化
-    normalized_languages = normalize_languages_input(languages)
-    logger.info(f"Normalized languages: {normalized_languages}")
-    
-    # 言語パラメータを検証
-    is_valid, search_languages, error_msg = validate_languages(normalized_languages)
-    if not is_valid:
-        return error_msg
-    
-    try:
-        with db_cursor() as cur:
-            logger.info(f"Fetching random article from languages: {search_languages}")
-            result = get_random_article(cur, search_languages)
-
-            if result:
-                title, text_body = result
-                # ランダム記事の言語を推定（search_languagesから推定）
-                # 実際の記事の言語を取得するにはDBクエリが必要だが、ここでは最初の言語を使用
-                lang = search_languages[0] if search_languages else LANGUAGES[0]
-                is_cjk = is_cjk_language(lang)
-                snippet = extract_article_by_length(text_body, length, is_cjk)
-                logger.info(f"Random article found: {title}")
-                return f"Random Article: '{title}'\n\n{snippet}"
-            
-            logger.warning("No articles found in any language")
-            return "No articles found"
-    except Exception as e:
-        logger.error(f"Error in read_random_article: {e}", exc_info=True)
-        return f"Error reading random article: {str(e)}"
-
-
 # ========================================
-# アプリケーション起動
+# Application startup
 # ========================================
 
 # Streamable HTTP transport for OpenWebUI compatibility

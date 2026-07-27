@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -Vy \
 # Python仮想環境を作成し、PATHを通す
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+ENV PYTHONPATH=/app/src
 
 # Pythonパッケージのインストール
 RUN pip install --no-cache-dir --upgrade pip && \

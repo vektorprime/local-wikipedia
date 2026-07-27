@@ -1013,7 +1013,11 @@ def search_local_wikipedia(
 # (replaces Starlette+Mount with native FastMCP streamable HTTP runner)
 
 
+# Expose app for uvicorn workers
+mcp_app = mcp.streamable_http_app()
+
 if __name__ == "__main__":
-    logger.info("Starting MCP Wikipedia server (streamable HTTP)...")
-    print("Starting MCP Wikipedia server (streamable HTTP)...")
-    mcp.run(transport="streamable-http")
+    import uvicorn
+    logger.info("Starting MCP Wikipedia server (streamable HTTP, 4 workers)...")
+    print("Starting MCP Wikipedia server (streamable HTTP, 4 workers)...")
+    uvicorn.run("local_wikipedia:mcp_app", host="0.0.0.0", port=PORT, workers=4)

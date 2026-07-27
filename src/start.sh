@@ -7,4 +7,5 @@
 /app/src/download.py
 
 # MCPサーバーの起動
-/app/src/local-wikipedia.py
+export PYTHONPATH=/app/src:$PYTHONPATH
+/app/src/local_wikipedia.py

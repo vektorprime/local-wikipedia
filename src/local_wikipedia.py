@@ -1018,6 +1018,6 @@ mcp_app = mcp.streamable_http_app()
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info("Starting MCP Wikipedia server (streamable HTTP, 4 workers)...")
-    print("Starting MCP Wikipedia server (streamable HTTP, 4 workers)...")
-    uvicorn.run("local_wikipedia:mcp_app", host="0.0.0.0", port=PORT, workers=4)
+    logger.info("Starting MCP Wikipedia server (streamable HTTP)...")
+    print("Starting MCP Wikipedia server (streamable HTTP)...")
+    uvicorn.run(mcp_app, host="0.0.0.0", port=PORT)

@@ -2,7 +2,9 @@
 
 import re
 import yaml
+import asyncio
 import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 import logging
 from contextlib import contextmanager
 from mcp.server.fastmcp import FastMCP
@@ -21,6 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 DB_PARAMS = dict(host="localhost", port=5432, dbname="finewiki", user="dbuser", password="dbpass")
+connection_pool = None  # Initialized at startup
 
 # Load config.yaml
 try:
@@ -84,34 +87,36 @@ def count_text_units(text: str, is_cjk: bool) -> int:
 # Database connection helper
 # ========================================
 
+def init_connection_pool(min_conn=2, max_conn=10):
+    """Initialize the threaded connection pool (call once at startup)"""
+    global connection_pool
+    connection_pool = ThreadedConnectionPool(min_conn, max_conn, **DB_PARAMS)
+    logger.info(f"DB connection pool initialized: {min_conn}-{max_conn} connections")
+
+
 @contextmanager
 def db_cursor(autocommit: bool = False):
     """
-    Provide database cursor (auto-manage connection and cursor)
-    
+    Provide database cursor from connection pool (thread-safe)
+
     Args:
         autocommit: Auto-commit (default: False)
-    
+
     Yields:
         psycopg2.cursor: Database cursor
     """
-    conn = None
+    conn = connection_pool.getconn()
     try:
-        conn = psycopg2.connect(**DB_PARAMS)
-        logger.debug("Database connection established")
         with conn.cursor() as cur:
             yield cur
             if not autocommit:
                 conn.commit()
     except Exception as e:
         logger.error(f"Database error: {e}")
-        if conn:
-            conn.rollback()
+        conn.rollback()
         raise
     finally:
-        if conn:
-            conn.close()
-            logger.debug("Database connection closed")
+        connection_pool.putconn(conn)
 
 
 # ========================================
@@ -884,13 +889,12 @@ def format_article_with_redirect_notice(text_body: str, from_title: str, to_titl
 # MCP tools
 # ========================================
 
-@mcp.tool()
-def search_local_wikipedia(
+def _search_sync(
     title: str,
-    length: Literal["very-short", "short", "medium", "full"] = "medium",
-    languages: Optional[list[str] | str] = None,
+    length: str,
+    languages: Optional[list[str] | str],
 ) -> str:
-    f"""
+    """
     Search and read a Wikipedia article by title. The search process includes exact title match, redirect resolution, partial title match, and full-text search.
     
     Args:
@@ -1006,12 +1010,41 @@ def search_local_wikipedia(
 
 
 # ========================================
+# Async MCP tool wrapper
+# ========================================
+
+@mcp.tool()
+async def search_local_wikipedia(
+    title: str,
+    length: Literal["very-short", "short", "medium", "full"] = "medium",
+    languages: Optional[list[str] | str] = None,
+) -> str:
+    """
+    Search and read a Wikipedia article by title. The search process includes exact title match, redirect resolution, partial title match, and full-text search.
+
+    Args:
+        title: Article title to read. such as "Wikipedia"
+        length: Length of the article to extract. Defaults to "medium". Set "very-short" for a brief snippet, "short" for a summary, "medium" for a detailed summary, and "full" or "long" for the entire article.
+        languages: Specific language code list (optional).
+
+    If user want to search in detail, **please set ** to read the full text of the article.
+
+    **Be careful when setting arguments when using the tool**.
+    """
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _search_sync, title, length, languages)
+
+
+# ========================================
 # Application startup
 # ========================================
 
 # Streamable HTTP transport for OpenWebUI compatibility
 # (replaces Starlette+Mount with native FastMCP streamable HTTP runner)
 
+
+# Initialize connection pool for threaded access
+init_connection_pool()
 
 # Expose app for uvicorn workers
 mcp_app = mcp.streamable_http_app()

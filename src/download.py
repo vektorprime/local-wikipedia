@@ -330,6 +330,9 @@ def create_indexes():
 
         print("Creating PGroonga index on 'text_body' (this may take several hours)...", flush=True)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_text_body ON documents USING pgroonga (text_body);")
+
+        print("Creating btree index on (title, language_code) for exact match...", flush=True)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_title_lang_btree ON documents (title, language_code);")
     print("✓ All document indexes are created.", flush=True)
 
 
@@ -342,6 +345,9 @@ def create_page_indexes():
 
         print("Creating index on pages 'page_id'...", flush=True)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_pages_page_id ON pages(page_id, language_code);")
+
+        print("Creating btree index on (page_title, language_code) for exact match...", flush=True)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_pages_title_lang_btree ON pages (page_title, language_code);")
     print("✓ All page indexes are created.", flush=True)
 
 

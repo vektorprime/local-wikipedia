@@ -23,7 +23,7 @@ import time
 import traceback
 
 # ========================================
-# パス設定
+# Path configuration
 # ========================================
 ROOT_DIR = Path("/app")
 CONFIG_FILE = ROOT_DIR / "config.yaml"
@@ -33,7 +33,7 @@ DATASETS_DIR = DATA_DIR / "dataset"
 CACHE_DIR = DATA_DIR / "cache"
 
 # ========================================
-# グローバル設定
+# Global configuration
 # ========================================
 NUM_CONSUMERS = os.cpu_count() or 4
 DATA_QUEUE = Queue(maxsize=0)  # unlimited queue (was NUM_CONSUMERS * 2)
@@ -43,16 +43,16 @@ DB_PARAMS = dict(host="localhost", port=5432, dbname="finewiki", user="dbuser", 
 
 
 # ========================================
-# データベース接続ヘルパー
+# Database connection helper
 # ========================================
 
 @contextmanager
 def db_cursor(autocommit=False):
     """
-    データベースカーソルを提供（接続とカーソルを自動管理）
+    Provide a database cursor (automatically manages the connection and cursor)
     
     Args:
-        autocommit: Trueの場合は自動コミットモード（インデックス作成用）
+        autocommit: If True, use autocommit mode (for index creation)
     """
     with psycopg2.connect(**DB_PARAMS) as conn:
         if autocommit:
@@ -64,18 +64,18 @@ def db_cursor(autocommit=False):
 
 
 # ========================================
-# ユーティリティ関数
+# Utility functions
 # ========================================
 
 def setup_directories():
-    """必要なディレクトリを作成"""
+    """Create the required directories"""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     DATASETS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def format_bytes(bytes_size: int) -> str:
-    """バイト数を人間が読みやすい形式に変換"""
+    """Convert a byte count into a human-readable format"""
     if bytes_size == 0: return "0 B"
     units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
     i = 0
@@ -86,7 +86,7 @@ def format_bytes(bytes_size: int) -> str:
 
 
 def iterate_in_chunks(iterator: Iterator[any], chunk_size: int) -> Iterator[List[any]]:
-    """イテレータを指定された件数ずつのチャンク(リスト)に分割する"""
+    """Split an iterator into chunks (lists) of the specified size"""
     chunk = []
     for item in iterator:
         chunk.append(item)
@@ -99,8 +99,8 @@ def iterate_in_chunks(iterator: Iterator[any], chunk_size: int) -> Iterator[List
 
 def clear_queue():
     """
-    キューをクリアする
-    各処理フェーズの間で呼ばれ、前のフェーズの終了シグナル(None)を削除する
+    Clear the queue
+    Called between processing phases to remove the previous phase's end signal (None)
     """
     while not DATA_QUEUE.empty():
         try:
@@ -110,11 +110,11 @@ def clear_queue():
 
 
 # ========================================
-# 設定とメタデータ管理
+# Configuration and metadata management
 # ========================================
 
 def load_config() -> Dict:
-    """config.yamlを読み込む"""
+    """Read config.yaml"""
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
@@ -128,7 +128,7 @@ def load_config() -> Dict:
 
 
 def download_languages() -> Dict[str, Dict]:
-    """HuggingFaceから言語メタデータ(ページ数、サイズ等)をダウンロード"""
+    """Download language metadata (page counts, sizes, etc.) from HuggingFace"""
     url = "https://huggingface.co/datasets/HuggingFaceFW/finewiki/resolve/main/language_subsets.csv"
     if METADATA_FILE.exists():
         try:
@@ -157,14 +157,14 @@ def download_languages() -> Dict[str, Dict]:
 
 
 # ========================================
-# データベース操作
+# Database operations
 # ========================================
 
 def setup_database_schema():
-    """データベーススキーマを初期化"""
+    """Initialize the database schema"""
     print("Setting up database schema...")
     with db_cursor() as cur:
-        # 言語管理テーブル
+        # Language management table
         cur.execute("""
             CREATE TABLE IF NOT EXISTS languages (
                 language_code VARCHAR(20) PRIMARY KEY,
@@ -173,7 +173,7 @@ def setup_database_schema():
                 is_redirection_complete BOOLEAN DEFAULT FALSE
             );
         """)
-        # ページテーブル（Wikimedia dumps由来）
+        # Pages table (derived from Wikimedia dumps)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS pages (
                 id BIGSERIAL PRIMARY KEY,
@@ -184,7 +184,7 @@ def setup_database_schema():
                 UNIQUE(page_id, language_code)
             );
         """)
-        # ドキュメントテーブル（FineWeb-Edu由来）
+        # Documents table (derived from FineWeb-Edu)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS documents (
                 id BIGSERIAL PRIMARY KEY,
@@ -195,7 +195,7 @@ def setup_database_schema():
                 UNIQUE(page_id, language_code)
             );
         """)
-        # リダイレクションテーブル（Wikimedia dumps由来）
+        # Redirections table (derived from Wikimedia dumps)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS redirections (
                 id BIGSERIAL PRIMARY KEY,
@@ -208,7 +208,7 @@ def setup_database_schema():
 
 
 def check_pages_complete(lang_code: str) -> bool:
-    """指定された言語のページデータが完全に存在するか確認"""
+    """Check whether the page data for the given language is fully present"""
     with db_cursor() as cur:
         cur.execute("SELECT is_page_complete FROM languages WHERE language_code = %s;", (lang_code,))
         result = cur.fetchone()
@@ -216,7 +216,7 @@ def check_pages_complete(lang_code: str) -> bool:
 
 
 def check_documents_complete(lang_code: str) -> bool:
-    """指定された言語のドキュメントデータが完全に存在するか確認"""
+    """Check whether the document data for the given language is fully present"""
     with db_cursor() as cur:
         cur.execute("SELECT is_document_complete FROM languages WHERE language_code = %s;", (lang_code,))
         result = cur.fetchone()
@@ -224,7 +224,7 @@ def check_documents_complete(lang_code: str) -> bool:
 
 
 def check_redirections_complete(lang_code: str) -> bool:
-    """指定された言語のリダイレクションデータが完全に存在するか確認"""
+    """Check whether the redirection data for the given language is fully present"""
     with db_cursor() as cur:
         cur.execute("SELECT is_redirection_complete FROM languages WHERE language_code = %s;", (lang_code,))
         result = cur.fetchone()
@@ -232,7 +232,7 @@ def check_redirections_complete(lang_code: str) -> bool:
 
 
 def check_indexes_exist() -> bool:
-    """ドキュメントテーブルの主要インデックスが存在するか確認"""
+    """Check whether the main indexes for the documents table exist"""
     with db_cursor() as cur:
         cur.execute("""
             SELECT COUNT(*) FROM pg_indexes
@@ -247,7 +247,7 @@ def check_indexes_exist() -> bool:
 
 
 def check_page_indexes_exist() -> bool:
-    """ページテーブルのインデックスが存在するか確認"""
+    """Check whether the indexes for the pages table exist"""
     with db_cursor() as cur:
         cur.execute("""
             SELECT COUNT(*) FROM pg_indexes
@@ -261,7 +261,7 @@ def check_page_indexes_exist() -> bool:
 
 
 def check_redirection_indexes_exist() -> bool:
-    """リダイレクションテーブルのインデックスが存在するか確認"""
+    """Check whether the indexes for the redirections table exist"""
     with db_cursor() as cur:
         cur.execute("""
             SELECT COUNT(*) FROM pg_indexes
@@ -276,7 +276,7 @@ def check_redirection_indexes_exist() -> bool:
 
 
 def mark_pages_complete(lang_code: str):
-    """言語のページ取得完了をマーク"""
+    """Mark the language's page fetch as complete"""
     with db_cursor() as cur:
         cur.execute(
             "UPDATE languages SET is_page_complete = TRUE WHERE language_code = %s;",
@@ -285,7 +285,7 @@ def mark_pages_complete(lang_code: str):
 
 
 def mark_documents_complete(lang_code: str):
-    """言語のドキュメント取得完了をマーク"""
+    """Mark the language's document fetch as complete"""
     with db_cursor() as cur:
         cur.execute(
             "UPDATE languages SET is_document_complete = TRUE WHERE language_code = %s;",
@@ -294,7 +294,7 @@ def mark_documents_complete(lang_code: str):
 
 
 def mark_redirections_complete(lang_code: str):
-    """言語のリダイレクション取得完了をマーク"""
+    """Mark the language's redirection fetch as complete"""
     with db_cursor() as cur:
         cur.execute(
             "UPDATE languages SET is_redirection_complete = TRUE WHERE language_code = %s;",
@@ -303,13 +303,13 @@ def mark_redirections_complete(lang_code: str):
 
 
 def ensure_language_exists(lang_code: str):
-    """言語レコードが存在することを保証"""
+    """Ensure a language record exists"""
     with db_cursor() as cur:
         cur.execute("INSERT INTO languages(language_code) VALUES (%s) ON CONFLICT DO NOTHING;", (lang_code,))
 
 
 def drop_indexes():
-    """ドキュメントテーブルのインデックスを削除（大量挿入のパフォーマンス向上のため）"""
+    """Drop the documents table indexes (to improve bulk-insert performance)"""
     print("Dropping existing document indexes (if any)...")
     with db_cursor() as cur:
         cur.execute("DROP INDEX IF EXISTS idx_documents_language_code;")
@@ -319,7 +319,7 @@ def drop_indexes():
 
 
 def create_indexes():
-    """ドキュメントテーブルのインデックスを作成"""
+    """Create the documents table indexes"""
     print("\n--- Creating document indexes... ---", flush=True)
     with db_cursor(autocommit=True) as cur:
         print("Creating index on 'language_code'...", flush=True)
@@ -337,7 +337,7 @@ def create_indexes():
 
 
 def create_page_indexes():
-    """ページテーブルのインデックスを作成"""
+    """Create the pages table indexes"""
     print("\n--- Creating page indexes... ---", flush=True)
     with db_cursor(autocommit=True) as cur:
         print("Creating index on pages 'language_code'...", flush=True)
@@ -352,7 +352,7 @@ def create_page_indexes():
 
 
 def create_redirection_indexes():
-    """リダイレクションテーブルのインデックスを作成"""
+    """Create the redirections table indexes"""
     print("\n--- Creating redirection indexes... ---", flush=True)
     with db_cursor(autocommit=True) as cur:
         print("Creating index on redirections 'language_code'...", flush=True)
@@ -367,13 +367,13 @@ def create_redirection_indexes():
 
 
 # ========================================
-# ページ取得処理
+# Page fetch processing
 # ========================================
 
 def plan_page_downloads(languages: List[str], lang_metadata: Dict) -> Dict:
     """
-    ページのダウンロード計画を作成
-    Returns: 計画を含む辞書 {'targets': [(lang_code, metadata), ...]}
+    Create the page download plan
+    Returns: A dict containing the plan {'targets': [(lang_code, metadata), ...]}
     """
     print("\n--- Planning Page Downloads ---")
     
@@ -398,8 +398,8 @@ def plan_page_downloads(languages: List[str], lang_metadata: Dict) -> Dict:
 
 def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
     """
-    ページデータをWikimedia dumpsからダウンロード・解析し、チャンクをキューに入れる
-    namespace 0（記事ページ）のみを抽出する
+    Download and parse page data from Wikimedia dumps, and enqueue chunks
+    Extract only namespace 0 (article pages)
     Returns: (lang_code, is_complete, processed_items)
     """
     print(f"  Starting page download for [{lang_code}]...")
@@ -415,7 +415,7 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
     
     while retries <= MAX_RETRIES:
         try:
-            # ダウンロード
+            # Download
             if not os.path.exists(local_gz_file):
                 print(f"  Downloading {download_url}...")
                 headers = {'User-Agent': 'local-wikipedia/1.0'}
@@ -438,7 +438,7 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
             else:
                 print(f"  File already exists: {local_gz_file}")
             
-            # 解凍
+            # Extract
             if not os.path.exists(extracted_sql_file):
                 print(f"  Extracting {local_gz_file}...")
                 with gzip.open(local_gz_file, "rb") as gz_file:
@@ -452,7 +452,7 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
             else:
                 print(f"  Extracted file already exists: {extracted_sql_file}")
             
-            # パースと挿入（namespace 0のみ）
+            # Parse and insert (namespace 0 only)
             print(f"  Parsing {extracted_sql_file} (namespace 0 only)...")
             chunk = []
             
@@ -480,7 +480,7 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
                             values_part = values_part[:-1]
                         
                         try:
-                            # パターン: (page_id, page_namespace, 'page_title', ...)
+                            # Pattern: (page_id, page_namespace, 'page_title', ...)
                             pattern = r"\((\d+),(\d+),'([^']*(?:''[^']*)*)'"
                             
                             for match in re.finditer(pattern, values_part):
@@ -488,7 +488,7 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
                                 page_namespace = int(match.group(2))
                                 page_title = match.group(3).replace("''", "'")
                                 
-                                # namespace 0（記事）のみを処理
+                                # Only process namespace 0 (articles)
                                 if page_namespace == 0:
                                     chunk.append((page_id, page_namespace, page_title, lang_code))
                                     processed_items += 1
@@ -506,7 +506,7 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
                             continue
 
             
-            # 残りのチャンクを追加
+            # Append the remaining chunk
             if chunk:
                 DATA_QUEUE.put(('page', lang_code, chunk))
             
@@ -543,8 +543,8 @@ def page_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
 
 def page_consumer(db_params: Dict, progress: Dict):
     """
-    キューからページデータを取り出し、DBに一括挿入する
-    各スレッドが独立したDB接続を持つ
+    Pull page data from the queue and bulk-insert it into the DB
+    Each thread has its own independent DB connection
     """
     tid = threading.get_ident()
     print(f"  [Page Consumer {tid}] Starting...", flush=True)
@@ -580,7 +580,7 @@ def page_consumer(db_params: Dict, progress: Dict):
 
 
 def execute_page_downloads(plan: Dict):
-    """ページのダウンロード計画を実行"""
+    """Execute the page download plan"""
     targets = plan['targets']
     if not targets:
         print("\nAll page data already exists.")
@@ -589,8 +589,8 @@ def execute_page_downloads(plan: Dict):
     print("\n--- Executing Page Downloads ---")
     print(f"Using {NUM_CONSUMERS} parallel DB writers.")
     
-    # 進捗管理
-    # 総ページはユーザーページなどの不要なnamespaceも含まれるため、ここでは扱わない
+    # Progress tracking
+    # The total page count also includes unwanted namespaces such as user pages, so we do not track that here
     progress = {
         "count": 0,
         "lock": threading.Lock()
@@ -598,23 +598,23 @@ def execute_page_downloads(plan: Dict):
     
     producer_results = []
     
-    # Producer数を制限（同時ダウンロード数を制御）
+    # Limit the number of producers (to control the number of concurrent downloads)
     max_concurrent_producers = min(2, len(targets))
     
     with ThreadPoolExecutor(max_workers=NUM_CONSUMERS + max_concurrent_producers) as executor:
-        # Consumer起動
+        # Start consumers
         consumer_futures = [
             executor.submit(page_consumer, DB_PARAMS, progress)
             for _ in range(NUM_CONSUMERS)
         ]
         
-        # Producer起動（各言語ごと）
+        # Start producers (one per language)
         producer_futures = [
             executor.submit(page_producer, lang_code, meta)
             for lang_code, meta in targets
         ]
         
-        # 各producerの結果を個別に収集
+        # Collect each producer's result individually
         for future in producer_futures:
             try:
                 result = future.result()
@@ -625,14 +625,14 @@ def execute_page_downloads(plan: Dict):
         print("\nAll page downloads finished. Signaling consumers to stop...", flush=True)
         DATA_QUEUE.put(None)
         
-        # Consumer終了待ち
+        # Wait for consumers to finish
         for future in consumer_futures:
             try:
                 future.result()
             except Exception as e:
                 print(f"\n  ✗ Page consumer failed with exception: {e}", file=sys.stderr, flush=True)
     
-    # 完了フラグを立てる（成功した言語のみ）
+    # Set the completion flag (only for languages that succeeded)
     for lang_code, is_complete, items in producer_results:
         if is_complete:
             mark_pages_complete(lang_code)
@@ -642,13 +642,13 @@ def execute_page_downloads(plan: Dict):
 
 
 # ========================================
-# ドキュメント取得処理
+# Document fetch processing
 # ========================================
 
 def plan_document_downloads(languages: List[str], lang_metadata: Dict) -> Dict:
     """
-    ドキュメントのダウンロード計画を作成
-    Returns: 計画を含む辞書 {'targets': [...], 'total_items': int, 'already_processed': int}
+    Create the document download plan
+    Returns: A dict containing the plan {'targets': [...], 'total_items': int, 'already_processed': int}
     """
     print("\n--- Planning Document Downloads ---")
     
@@ -684,8 +684,8 @@ def plan_document_downloads(languages: List[str], lang_metadata: Dict) -> Dict:
 
 def document_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
     """
-    HuggingFaceからドキュメントデータをダウンロードし、チャンクをキューに入れる
-    エラー発生時にはリトライし、処理済みの箇所から再開を試みる
+    Download document data from HuggingFace and enqueue chunks
+    On error, retry and attempt to resume from where processing left off
     Returns: (lang_code, is_complete, processed_items)
     """
     print(f"  Starting download for [{lang_code}]...")
@@ -734,8 +734,8 @@ def document_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
 
 def document_consumer(db_params: Dict, progress: Dict):
     """
-    キューからドキュメントデータを取り出し、DBに一括挿入する
-    各スレッドが独立したDB接続を持つ
+    Pull document data from the queue and bulk-insert it into the DB
+    Each thread has its own independent DB connection
     """
     tid = threading.get_ident()
     print(f"  [Document Consumer {tid}] Starting...", flush=True)
@@ -775,7 +775,7 @@ def document_consumer(db_params: Dict, progress: Dict):
 
 
 def execute_document_downloads(plan: Dict):
-    """ドキュメントのダウンロード計画を実行"""
+    """Execute the document download plan"""
     targets = plan['targets']
     
     if not targets:
@@ -786,7 +786,7 @@ def execute_document_downloads(plan: Dict):
     print(f"Total items to process: {plan['total_items']:,}")
     print(f"Using {NUM_CONSUMERS} parallel DB writers.")
     
-    # インデックスを削除してパフォーマンス向上
+    # Drop indexes to improve performance
     drop_indexes()
 
     progress = {
@@ -801,7 +801,7 @@ def execute_document_downloads(plan: Dict):
         consumer_futures = [executor.submit(document_consumer, DB_PARAMS, progress) for _ in range(NUM_CONSUMERS)]
         producer_futures = [executor.submit(document_producer, lang_code, meta) for lang_code, meta in targets]
 
-        # 各producerの結果を個別に収集
+        # Collect each producer's result individually
         for future in producer_futures:
             try:
                 result = future.result()
@@ -818,7 +818,7 @@ def execute_document_downloads(plan: Dict):
             except Exception as e:
                 print(f"\n  ✗ Consumer failed with exception: {e}", file=sys.stderr, flush=True)
 
-    # 完了フラグを立てる（成功した言語のみ）
+    # Set the completion flag (only for languages that succeeded)
     for lang_code, is_complete, items in producer_results:
         if is_complete:
             mark_documents_complete(lang_code)
@@ -828,13 +828,13 @@ def execute_document_downloads(plan: Dict):
 
 
 # ========================================
-# リダイレクト取得処理
+# Redirection fetch processing
 # ========================================
 
 def plan_redirection_downloads(languages: List[str], lang_metadata: Dict) -> Dict:
     """
-    リダイレクションのダウンロード計画を作成
-    Returns: 計画を含む辞書 {'targets': [(lang_code, metadata), ...]}
+    Create the redirection download plan
+    Returns: A dict containing the plan {'targets': [(lang_code, metadata), ...]}
     """
     print("\n--- Planning Redirection Downloads ---")
     
@@ -860,8 +860,8 @@ def plan_redirection_downloads(languages: List[str], lang_metadata: Dict) -> Dic
 
 def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
     """
-    リダイレクションデータをWikimedia dumpsからダウンロード・解析し、チャンクをキューに入れる
-    rd_from（リダイレクト元のpage_id）とrd_title（リダイレクト先のタイトル）を抽出する
+    Download and parse redirection data from Wikimedia dumps, and enqueue chunks
+    Extract rd_from (the source page_id of the redirect) and rd_title (the title of the redirect target)
     Returns: (lang_code, is_complete, processed_items)
     """
     print(f"  Starting redirection download for [{lang_code}]...")
@@ -877,7 +877,7 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
     
     while retries <= MAX_RETRIES:
         try:
-            # ダウンロード
+            # Download
             if not os.path.exists(local_gz_file):
                 print(f"  Downloading {download_url}...")
                 headers = {'User-Agent': 'local-wikipedia/1.0'}
@@ -900,7 +900,7 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
             else:
                 print(f"  File already exists: {local_gz_file}")
             
-            # 解凍
+            # Extract
             if not os.path.exists(extracted_sql_file):
                 print(f"  Extracting {local_gz_file}...")
                 with gzip.open(local_gz_file, "rb") as gz_file:
@@ -914,7 +914,7 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
             else:
                 print(f"  Extracted file already exists: {extracted_sql_file}")
             
-            # パースと挿入
+            # Parse and insert
             print(f"  Parsing {extracted_sql_file}...")
             chunk = []
             
@@ -924,17 +924,17 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
                 for line in f:
                     line = line.strip()
                     
-                    # リダイレクトセクションの開始
+                    # Start of the redirect section
                     if "ALTER TABLE `redirect` DISABLE KEYS" in line:
                         in_redirect_section = True
                         continue
                     
-                    # リダイレクトセクションの終了
+                    # End of the redirect section
                     if "ALTER TABLE `redirect` ENABLE KEYS" in line:
                         in_redirect_section = False
                         break
                     
-                    # INSERT文のパース
+                    # Parse the INSERT statement
                     if in_redirect_section and line.startswith("INSERT INTO"):
                         values_start = line.find("VALUES")
                         if values_start == -1:
@@ -944,10 +944,10 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
                         if values_part.endswith(';'):
                             values_part = values_part[:-1]
                         
-                        # 各レコードをパース
-                        # フォーマット: (rd_from, rd_namespace, 'rd_title', ...)
-                        # rd_from: リダイレクト元のページID
-                        # rd_title: リダイレクト先のタイトル
+                        # Parse each record
+                        # Format: (rd_from, rd_namespace, 'rd_title', ...)
+                        # rd_from: The source page ID of the redirect
+                        # rd_title: The title of the redirect target
                         try:
                             pattern = r"\((\d+),\d+,'([^']*(?:''[^']*)*)'"
                             
@@ -958,7 +958,7 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
                                 chunk.append((from_page_id, to_title, lang_code))
                                 processed_items += 1
                                 
-                                # チャンクサイズに達したらキューに追加
+                                # Append to the queue once the chunk size is reached
                                 if len(chunk) >= CHUNK_ITEMS:
                                     DATA_QUEUE.put(('redirection', lang_code, chunk.copy()))
                                     chunk = []
@@ -971,7 +971,7 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
                             traceback.print_exc(file=sys.stderr)
                             continue
             
-            # 残りのチャンクを追加
+            # Append the remaining chunk
             if chunk:
                 DATA_QUEUE.put(('redirection', lang_code, chunk))
             
@@ -1008,8 +1008,8 @@ def redirection_producer(lang_code: str, meta: Dict) -> Tuple[str, bool, int]:
 
 def redirection_consumer(db_params: Dict, progress: Dict):
     """
-    キューからリダイレクションデータを取り出し、DBに一括挿入する
-    各スレッドが独立したDB接続を持つ
+    Pull redirection data from the queue and bulk-insert it into the DB
+    Each thread has its own independent DB connection
     """
     tid = threading.get_ident()
     print(f"  [Redirection Consumer {tid}] Starting...", flush=True)
@@ -1048,7 +1048,7 @@ def redirection_consumer(db_params: Dict, progress: Dict):
 
 
 def execute_redirection_downloads(plan: Dict):
-    """リダイレクションのダウンロード計画を実行"""
+    """Execute the redirection download plan"""
     targets = plan['targets']
     if not targets:
         print("\nAll redirection data already exists.")
@@ -1057,7 +1057,7 @@ def execute_redirection_downloads(plan: Dict):
     print("\n--- Executing Redirection Downloads ---")
     print(f"Using {NUM_CONSUMERS} parallel DB writers.")
     
-    # 進捗管理
+    # Progress tracking
     total_redirections = sum(meta.get('redirections', 0) for _, meta in targets)
     progress = {
         "count": 0,
@@ -1067,23 +1067,23 @@ def execute_redirection_downloads(plan: Dict):
     
     producer_results = []
     
-    # Producer数を制限（同時ダウンロード数を制御）
+    # Limit the number of producers (to control the number of concurrent downloads)
     max_concurrent_producers = min(2, len(targets))
     
     with ThreadPoolExecutor(max_workers=NUM_CONSUMERS + max_concurrent_producers) as executor:
-        # Consumer起動
+        # Start consumers
         consumer_futures = [
             executor.submit(redirection_consumer, DB_PARAMS, progress) 
             for _ in range(NUM_CONSUMERS)
         ]
         
-        # Producer起動（各言語ごと）
+        # Start producers (one per language)
         producer_futures = [
             executor.submit(redirection_producer, lang_code, meta) 
             for lang_code, meta in targets
         ]
         
-        # 各producerの結果を個別に収集
+        # Collect each producer's result individually
         for future in producer_futures:
             try:
                 result = future.result()
@@ -1094,14 +1094,14 @@ def execute_redirection_downloads(plan: Dict):
         print("\nAll redirection downloads finished. Signaling consumers to stop...", flush=True)
         DATA_QUEUE.put(None)
         
-        # Consumer終了待ち
+        # Wait for consumers to finish
         for future in consumer_futures:
             try:
                 future.result()
             except Exception as e:
                 print(f"\n  ✗ Redirection consumer failed with exception: {e}", file=sys.stderr, flush=True)
     
-    # 完了フラグを立てる（成功した言語のみ）
+    # Set the completion flag (only for languages that succeeded)
     for lang_code, is_complete, items in producer_results:
         if is_complete:
             mark_redirections_complete(lang_code)
@@ -1111,11 +1111,11 @@ def execute_redirection_downloads(plan: Dict):
 
 
 # ========================================
-# メイン処理
+# Main processing
 # ========================================
 
 def main():
-    # 初期化フェーズ
+    # Initialization phase
     setup_directories()
     config = load_config()
     languages = config['source']['language']
@@ -1129,34 +1129,34 @@ def main():
         print(f"ERROR: Database setup failed: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # ページ処理フェーズ
+    # Page processing phase
     page_plan = plan_page_downloads(languages, lang_metadata)
     try:
         execute_page_downloads(page_plan)
     except Exception as e:
         print(f"ERROR: Page processing failed: {e}", file=sys.stderr)
         sys.exit(1)
-    clear_queue()  # フェーズ間でキューをクリア
+    clear_queue()  # Clear the queue between phases
     
-    # ドキュメント処理フェーズ
+    # Document processing phase
     doc_plan = plan_document_downloads(languages, lang_metadata)
     try:
         execute_document_downloads(doc_plan)
     except Exception as e:
         print(f"ERROR: Document processing failed: {e}", file=sys.stderr)
         sys.exit(1)
-    clear_queue()  # フェーズ間でキューをクリア
+    clear_queue()  # Clear the queue between phases
     
-    # リダイレクション処理フェーズ
+    # Redirection processing phase
     redir_plan = plan_redirection_downloads(languages, lang_metadata)
     try:
         execute_redirection_downloads(redir_plan)
     except Exception as e:
         print(f"ERROR: Redirection processing failed: {e}", file=sys.stderr)
         sys.exit(1)
-    clear_queue()  # フェーズ間でキューをクリア
+    clear_queue()  # Clear the queue between phases
     
-    # インデックス作成フェーズ（ページ）
+    # Index creation phase (pages)
     try:
         if not check_page_indexes_exist():
             create_page_indexes()
@@ -1166,7 +1166,7 @@ def main():
         print(f"ERROR: Page index creation failed: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # インデックス作成フェーズ（ドキュメント）
+    # Index creation phase (documents)
     try:
         if not check_indexes_exist():
             create_indexes()
@@ -1176,7 +1176,7 @@ def main():
         print(f"ERROR: Index creation failed: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # インデックス作成フェーズ（リダイレクション）
+    # Index creation phase (redirections)
     try:
         if not check_redirection_indexes_exist():
             create_redirection_indexes()

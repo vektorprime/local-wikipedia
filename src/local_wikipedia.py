@@ -405,7 +405,7 @@ def generate_heuristic_queries(query: str, search_languages: List[str]) -> List[
             r"\s+de\s+", # fr, es
             r"\s+di\s+", # it
             r"\s+о\s+", # ru
-            r"\s*[_\-<>|:;/\\]\s*", # 記号類
+            r"\s*[_\-<>|:;/\\]\s*", # symbols/punctuation
         ]
         
         # Remove prefixes

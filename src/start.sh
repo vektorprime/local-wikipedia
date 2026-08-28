@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# DBの初期設定
+# Initial database setup
 /app/src/db-init.sh
 
-# Wikipediaデータのダウンロード・保存
+# Download and store the Wikipedia data
 /app/src/download.py
 
-# MCPサーバーの起動
+# Start the MCP server
 export PYTHONPATH=/app/src:$PYTHONPATH
 /app/src/local_wikipedia.py

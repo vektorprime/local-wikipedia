@@ -1,13 +1,13 @@
-# ベースイメージ
+# Base image
 FROM ubuntu:24.04
 
-# 作業ディレクトリの設定
+# Set the working directory
 WORKDIR /app
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
-# Groonga, PGroonga, PostgreSQLのインストール
+# Install Groonga, PGroonga, and PostgreSQL
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     lsb-release \
@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
     postgresql-16-pgroonga && \
     apt-get clean && rm -rf /var/lib/apt/lists/* ./groonga-apt-source-latest-*.deb
 
-# Pythonのインストール
+# Install Python
 RUN apt-get update && apt-get install -Vy \
     python3 \
     python3-pip \
@@ -29,12 +29,12 @@ RUN apt-get update && apt-get install -Vy \
     python-is-python3 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Python仮想環境を作成し、PATHを通す
+# Create a Python virtual environment and add it to PATH
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONPATH=/app/src
 
-# Pythonパッケージのインストール
+# Install Python packages
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
     datasets \
@@ -45,19 +45,19 @@ RUN pip install --no-cache-dir --upgrade pip && \
     starlette \
     uvicorn
 
-# その他雑多なツールのインストール
+# Install other assorted tools
 RUN apt-get update && apt-get install -y \
     curl \
     sudo && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
-# sudoは必須
-# curlは必須ではないがデバッグのため
+# sudo is required
+# curl is not strictly required, but handy for debugging
 
-# 各ファイルのコピー
+# Copy each file
 COPY src /app/src
-# 設定ファイル(デフォルト設定)のコピー
+# Copy the config file (default configuration)
 COPY config.yaml .
 
 ENTRYPOINT ["src/start.sh"]
-# 仮EntryPoint
+# Temporary entrypoint
 # ENTRYPOINT ["tail", "-f", "/dev/null"]

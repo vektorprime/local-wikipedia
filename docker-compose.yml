@@ -1,6 +1,6 @@
 services:
 
-  # アクセス先
+  # Access endpoint
   # "local-wikipedia": {
   #  "url": "http://local-wikipedia:29423"
   # }
